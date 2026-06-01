@@ -1,0 +1,6 @@
+{
+  "name": "TexTrack",
+  "description": "Next-generation digital B2B marketplace and production tracking platform connecting global garment buyers with verified Indian factories.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

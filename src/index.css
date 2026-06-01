@@ -1,0 +1,157 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* 1. Global Page Background and Text Color */
+body {
+  font-family: var(--font-sans);
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+/* 2. Page & Element background utilities overrides */
+.min-h-screen, .bg-slate-50, .bg-slate-100 {
+  background-color: #0f172a !important;
+}
+.bg-slate-50\/50, .bg-slate-100\/50 {
+  background-color: rgba(15, 23, 42, 0.5) !important;
+}
+
+/* Redefine card elements with the dark bento grid background */
+.bg-white {
+  background-color: #1e293b !important;
+}
+
+/* Modals & dropdown backgrounds */
+select, input, textarea, option {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+/* Banners or headers using bg-slate-900 to match the dark theme context */
+.bg-slate-900 {
+  background-color: #121b2d !important;
+}
+
+/* 3. Border overrides (sleek and modern Bento Grid borders) */
+.border,
+.border-slate-250,
+.border-slate-200,
+.border-slate-150,
+.border-slate-100,
+.border-r,
+.border-b,
+.border-t,
+.border-l {
+  border-color: #334155 !important;
+}
+
+/* Ensure selected tab active lines/borders are high contrast indigo */
+.border-blue-600, .border-indigo-600 {
+  border-color: #6366f1 !important;
+}
+
+/* 4. Text color hierarchy overrides (High Contrast & Muted Labels) */
+.text-slate-900,
+.text-slate-800,
+.text-slate-700,
+h1, h2, h3, h4, h5, h6 {
+  color: #f8fafc !important;
+}
+
+.text-slate-600,
+.text-slate-500,
+.text-slate-400 {
+  color: #94a3b8 !important; /* Secondary text */
+}
+
+/* Accent Indigo/Blue Branding (Bento theme) */
+.text-blue-600,
+.text-blue-500 {
+  color: #a5b4fc !important;
+}
+.text-blue-700,
+.text-blue-850,
+.text-blue-800 {
+  color: #c7d2fe !important;
+}
+.text-blue-400 {
+  color: #818cf8 !important;
+}
+
+/* Background Blue buttons & badges mapped to beautiful Indigo */
+.bg-blue-600,
+.bg-blue-500,
+.bg-slate-950 {
+  background-color: #6366f1 !important;
+  color: #ffffff !important;
+}
+.bg-blue-600:hover,
+.bg-blue-500:hover,
+.bg-slate-950:hover {
+  background-color: #4f46e5 !important;
+}
+
+/* Badge highlights */
+.bg-blue-50, .bg-blue-100 {
+  background-color: rgba(99, 102, 241, 0.15) !important;
+  color: #a5b4fc !important;
+}
+
+.bg-emerald-50, .bg-emerald-100 {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+}
+.text-emerald-700, .text-emerald-600 {
+  color: #34d399 !important;
+}
+
+.bg-rose-50, .bg-rose-100 {
+  background-color: rgba(244, 63, 94, 0.15) !important;
+  color: #fb7185 !important;
+}
+.text-rose-700, .text-rose-600 {
+  color: #fb7185 !important;
+}
+
+.bg-amber-50, .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  color: #fbbf24 !important;
+}
+.text-amber-700, .text-amber-600 {
+  color: #fbbf24 !important;
+}
+
+/* Ensure table headers are styled correctly and cleanly */
+thead tr {
+  background-color: #0f172a !important;
+  color: #94a3b8 !important;
+}
+tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+/* Bento Grid extra visual refinements */
+.shadow-xs, .shadow-2xs, .shadow-md, .shadow-inner {
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Custom scrollbar matching dark slate styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
