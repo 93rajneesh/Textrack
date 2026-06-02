@@ -174,19 +174,19 @@ Would you like me to draft an initial RFQ template to **Tirupur Prime Knits** on
       <div className="space-y-6">
         {/* Quick Sourcing Prompts */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs" id="presets-panel">
-          <h4 className="font-semibold text-xs text-slate-900 mb-3 uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+          <h4 className="font-semibold text-xs text-slate-900 mb-2 uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Sourcing Prompt Library
           </h4>
-          <p className="text-[11px] text-slate-500 mb-4 leading-normal">
+          <p className="text-[10.5px] text-slate-500 mb-3.5 leading-normal">
             Click on any of our built-in industry expert prompts to immediately query our Gen-AI models.
           </p>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {presetQueries.map((item, index) => (
               <button
                 key={index}
                 onClick={() => handleQuery(item.text)}
                 disabled={loading}
-                className="w-full text-left bg-slate-50 hover:bg-blue-50/50 hover:border-blue-200 border border-slate-200 rounded-xl p-3 text-xs text-slate-700 flex items-center justify-between group transition-all cursor-pointer"
+                className="w-full text-left bg-slate-50 hover:bg-blue-50/50 hover:border-blue-200 border border-slate-200 rounded-xl p-2.5 text-[11px] text-slate-700 flex items-center justify-between group transition-all cursor-pointer"
               >
                 <span className="flex items-center gap-2">
                   <span className="text-sm shrink-0">{item.icon}</span>
@@ -194,6 +194,75 @@ Would you like me to draft an initial RFQ template to **Tirupur Prime Knits** on
                 </span>
                 <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all shrink-0" />
               </button>
+            ))}
+          </div>
+        </div>
+
+        {/* AI Buyer Copilot Risk Diagnostics Center */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4" id="buyer-copilot-diagnostics">
+          <div>
+            <h4 className="font-semibold text-xs text-slate-900 uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-blue-600 animate-pulse" /> AI Copilot Expert Audits
+            </h4>
+            <p className="text-[10.5px] text-slate-500 mt-1 leading-relaxed">
+              Launch preconfigured expert diagnostics targeting critical apparel sourcing bottlenecks:
+            </p>
+          </div>
+          
+          <div className="space-y-2">
+            {[
+              { 
+                label: '⚠️ Assess Active Timeline Risks', 
+                query: 'Evaluate active purchase orders on file. Scan for TNA calendar milestone delays, material delays, and predict shipment timeline bottlenecks.',
+                desc: 'Audits milestones & planned delivery rates.'
+              },
+              { 
+                label: '📊 Compare Factory Price-to-Trust', 
+                query: 'Review the current supplier directory. Compare trust scores, daily capacities, and machine sizes to identify the safest, most cost-effective shopfloor.',
+                desc: 'B2B factory comparison scorecard analytics.'
+              },
+              { 
+                label: '🛡️ Sustainable Fabric & Lab Compliance Audit', 
+                query: 'Verify Tech-pack specs, lab-dip approvals, and fabric test reports required for modern sustainable cotton exports.',
+                desc: 'Ensures strict global compliance limits.'
+              }
+            ].map((diag, index) => (
+              <button
+                key={index}
+                onClick={() => handleQuery(diag.query)}
+                disabled={loading}
+                className="w-full text-left border border-slate-200 hover:border-blue-500/50 hover:bg-slate-50/50 p-2.5 rounded-xl transition-all cursor-pointer block text-xs space-y-1 group"
+              >
+                <strong className="block text-slate-800 text-[11px] font-bold group-hover:text-blue-700 transition-colors">{diag.label}</strong>
+                <span className="block text-[10px] text-slate-400 leading-tight">{diag.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Visual Risk Summaries Panel */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4" id="visual-risk-summary-cards">
+          <div>
+            <h4 className="font-semibold text-xs text-slate-900 uppercase tracking-widest text-slate-400">📊 Live Sourcing Risk Radar</h4>
+            <p className="text-[10.5px] text-slate-500 mt-0.5">Real-time aggregate threat indexes across Indian manufacturing nodes:</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2.5">
+            {[
+              { title: 'Global Delay Risk Ratio', val: 'Low (34%)', color: 'bg-emerald-50 text-emerald-800 border-emerald-100', width: '34%' },
+              { title: 'Factory Overload Rate', val: 'Optimum (12%)', color: 'bg-blue-50 text-blue-800 border-blue-100', width: '12%' },
+              { title: 'Sample Review Velocity', val: 'Delayed (8.2d)', color: 'bg-amber-50 text-amber-800 border-amber-100', width: '70%' },
+              { title: 'Customs Transit Delay', val: 'Minimal (4%)', color: 'bg-emerald-50 text-emerald-800 border-emerald-100', width: '4%' }
+            ].map((item, idx) => (
+              <div key={idx} className={`p-3 rounded-xl border ${item.color} space-y-2`}>
+                <div className="flex justify-between items-center text-[10px] font-mono leading-none">
+                  <span className="font-bold uppercase">{item.title}</span>
+                  <strong className="font-black text-[11px]">{item.val}</strong>
+                </div>
+                <div className="w-full h-1.5 bg-white/60 rounded-full overflow-hidden">
+                  <div className="h-full bg-slate-800 rounded-full" style={{ width: item.width }} />
+                </div>
+              </div>
             ))}
           </div>
         </div>

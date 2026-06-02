@@ -176,10 +176,16 @@ export interface SourcingAssistantResponse {
 // Global Activity / Audit trail collection
 export interface ActivityLog {
   id: string;
-  poId: string;
+  orderId: string; // same as poId
+  poId?: string; // backward compatibility
+  companyId: string;
   userId: string;
   userName: string;
-  action: string; // e.g. "Rajneesh uploaded PP sample"
+  action: string; // e.g. "Rajneesh updated Sewing Progress from 60% to 72%."
+  entityType?: string; // "PO" | "Document" | "RFQ" | "Sample" | "Milestone"
+  entityId?: string;
+  oldValue?: string;
+  newValue?: string;
   timestamp: string;
 }
 
@@ -197,22 +203,93 @@ export interface POTask {
 export interface TNAEvent {
   id: string;
   poId: string;
-  name: string; // e.g. "Lab Dip", "PP Sample", etc.
+  orderId?: string; // mapping convenience
+  name: string; // e.g. "Fabric Booking", "Lab Dip Approval", etc.
+  eventName?: string; // alias of name for compatibility
+  owner: string; // e.g. "Buyer", "Supplier", "QA"
   plannedDate: string;
   actualDate?: string;
-  owner?: string; // "Buyer", "Supplier", "QA" etc.
   status: 'Pending' | 'On Track' | 'Completed' | 'Delayed';
+  remarks?: string;
 }
 
 // Document vault index per PO
 export interface PODocument {
   id: string;
   poId: string;
-  type: 'PO' | 'Tech Pack' | 'BOM' | 'Lab Dip' | 'PP Sample' | 'Inspection Report' | 'Invoice' | 'Packing List';
+  orderId?: string; // same as poId
+  companyId?: string;
+  type: 'PO' | 'Tech Pack' | 'BOM' | 'Lab Dip' | 'PP Sample' | 'Inspection Report' | 'Invoice' | 'Packing List' | 'Fabric Test Report' | 'PP Sample Approval' | 'Shipping Documents';
+  documentType?: string; // alternative name
   fileUrl: string;
   fileName: string;
+  version?: number;
   uploadedBy: string;
   uploadedAt: string;
+  uploadDate?: string; // alternative name
+  approvalStatus?: 'Pending' | 'Approved' | 'Rejected';
+}
+
+// Garment Sample Sourcing Tracking
+export interface Sample {
+  id: string;
+  orderId: string;
+  sampleType: 'Proto Sample' | 'Fit Sample' | 'Size Set Sample' | 'PP Sample' | 'Shipment Sample';
+  submitDate: string;
+  approvalDate?: string;
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Revision Requested';
+  comments: string;
+  photos: string[];
+  feedbackHistory?: {
+    date: string;
+    by: string;
+    status: string;
+    comments: string;
+  }[];
+}
+
+// Supplier Performance Scorecard Engine
+export interface SupplierScorecard {
+  id: string; // firestore id
+  supplierId: string; // companyId
+  qualityScore: number; // 0 - 100
+  deliveryScore: number; // 0 - 100
+  responseScore: number; // 0 - 100
+  complianceScore: number; // 0 - 100
+  repeatOrderScore: number; // 0 - 100
+  inspectionPassRate: number; // 0 - 100
+  claimRate: number; // 0 - 100
+  overallScore: number; // Quality*30% + Delivery*30% + Response*15% + Compliance*15% + Repeat*10%
+}
+
+// Factory Capacity Planning
+export interface FactoryCapacity {
+  id: string;
+  supplierId: string;
+  monthlyCapacity: number;
+  bookedCapacity: number;
+  availableCapacity: number;
+  lineCount: number;
+  workforceCount: number;
+  bookings?: {
+    month: string; // e.g. "2026-06", "2026-07"
+    bookedQty: number;
+    notes?: string;
+  }[];
+}
+
+// Enterprise App Notification Engine
+export interface AppNotification {
+  id: string;
+  userId: string;
+  companyId: string;
+  title: string;
+  message: string;
+  category: 'Production' | 'Quality' | 'Shipment' | 'Document' | 'RFQ' | 'General';
+  severity: 'info' | 'warning' | 'critical';
+  actionUrl?: string;
+  isRead: boolean;
+  createdAt: string;
 }
 
 // Supplier bids responding to active RFQs

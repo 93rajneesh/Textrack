@@ -10,12 +10,58 @@ import { Search, MapPin, Layers, Award, Clock, ArrowRight, ShieldCheck, Mail, Se
 interface SupplierDirectoryProps {
   companies: CompanyInfo[];
   onSubmitRFQ: (rfq: any) => void;
+  scorecards?: any[];
+  capacities?: any[];
+  currentUser?: any;
+  onRefresh?: () => void;
 }
 
-export default function SupplierDirectory({ companies, onSubmitRFQ }: SupplierDirectoryProps) {
+export default function SupplierDirectory({ 
+  companies, 
+  onSubmitRFQ, 
+  scorecards = [], 
+  capacities = [], 
+  currentUser, 
+  onRefresh = () => {} 
+}: SupplierDirectoryProps) {
   const [filterRegion, setFilterRegion] = useState('All');
   const [filterCategory, setFilterCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Interactive capacity update state
+  const [updatingCapId, setUpdatingCapId] = useState<string | null>(null);
+  const [newBookedCap, setNewBookedCap] = useState<string>('');
+  const [isCapSubmitting, setIsCapSubmitting] = useState(false);
+
+  // Expanded card toggle state (interactive audit details)
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
+
+  const handleUpdateCapacitySubmit = async (supplierId: string, currentMonthlyCap: number) => {
+    if (!newBookedCap || isNaN(Number(newBookedCap))) return;
+    setIsCapSubmitting(true);
+    try {
+      const response = await fetch(`/api/suppliers/${supplierId}/capacity`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookedCapacity: Number(newBookedCap),
+          monthlyCapacity: currentMonthlyCap
+        })
+      });
+      if (response.ok) {
+        setUpdatingCapId(null);
+        setNewBookedCap('');
+        onRefresh();
+      } else {
+        const err = await response.json();
+        alert('Failed to save capacity limit: ' + err.error);
+      }
+    } catch(err: any) {
+      alert('Network error updating capacity log: ' + err.message);
+    } finally {
+      setIsCapSubmitting(false);
+    }
+  };
   
   // RFQ dialog state
   const [targetCompany, setTargetCompany] = useState<CompanyInfo | null>(null);
@@ -192,7 +238,7 @@ export default function SupplierDirectory({ companies, onSubmitRFQ }: SupplierDi
 
               {/* Product tags */}
               <div className="col-span-2 pt-2 border-t border-slate-100">
-                <span className="text-slate-400 font-mono text-[10px] uppercase block mb-1.5">Specialties</span>
+                <span className="text-slate-400 font-mono text-[10px] uppercase block mb-1.5 font-bold">Specialties</span>
                 <div className="flex flex-wrap gap-1">
                   {supplier.productCategories.map((type, idx) => (
                     <span key={idx} className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md font-medium text-[10px]">
@@ -204,7 +250,7 @@ export default function SupplierDirectory({ companies, onSubmitRFQ }: SupplierDi
 
               {/* Verified Certifications */}
               <div className="col-span-2 pt-2">
-                <span className="text-slate-400 font-mono text-[10px] uppercase block mb-1.5">Audited Certs</span>
+                <span className="text-slate-400 font-mono text-[10px] uppercase block mb-1.5 font-bold">Audited Certs</span>
                 <div className="flex flex-wrap gap-1">
                   {supplier.certifications.map((cert, idx) => (
                     <span key={idx} className="bg-emerald-50 text-emerald-700 border border-emerald-100/50 px-2 py-0.5 rounded-md font-mono text-[10px] flex items-center gap-1 font-semibold">
@@ -214,6 +260,140 @@ export default function SupplierDirectory({ companies, onSubmitRFQ }: SupplierDi
                   ))}
                 </div>
               </div>
+
+              {/* Dynamic Scorecard and Capacity Sub-Section */}
+              {(() => {
+                const card = scorecards.find(s => s.supplierId === supplier.id);
+                const cap = capacities.find(c => c.supplierId === supplier.id);
+                const isExpanded = expandedCardId === supplier.id;
+
+                const utilPercent = cap && cap.monthlyCapacity > 0 
+                  ? Math.round((cap.bookedCapacity / cap.monthlyCapacity) * 100) 
+                  : 0;
+
+                const isMyFactory = currentUser?.role === 'supplier' && currentUser?.companyId === supplier.id;
+
+                return (
+                  <div className="col-span-2 pt-3 border-t border-slate-100 space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedCardId(isExpanded ? null : supplier.id)}
+                      className="w-full flex items-center justify-between text-[11px] font-bold text-slate-500 hover:text-slate-900 font-mono uppercase bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 transition-all cursor-pointer"
+                    >
+                      <span>📊 Audit Score & Capacity Planner</span>
+                      <span>{isExpanded ? 'Hide Details ▲' : 'Inspect Analytics ▼'}</span>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-4.5 space-y-4 animate-in fade-in duration-150">
+                        {/* A. Quality Scorecard */}
+                        {card ? (
+                          <div className="space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-mono uppercase font-black text-slate-400">Quality Performance Summary</span>
+                              <span className="text-xs font-mono font-black text-slate-800 bg-slate-200/60 px-2 py-0.5 rounded">Composite: {card.overallScore}%</span>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-3 text-[10px]">
+                              {[
+                                { name: 'Quality assurance', val: card.qualityScore },
+                                { name: 'Delivery precision', val: card.deliveryScore },
+                                { name: 'Response index', val: card.responseScore },
+                                { name: 'Social Compliance', val: card.complianceScore },
+                                { name: 'Inspection Passrate', val: card.inspectionPassRate },
+                                { name: 'Claim/Rejection rate', val: card.claimRate, isRed: true }
+                              ].map((bar, bIdx) => (
+                                <div key={bIdx} className="space-y-1">
+                                  <div className="flex justify-between font-mono text-[9px] text-slate-500">
+                                    <span className="font-bold truncate">{bar.name}</span>
+                                    <span className="font-extrabold">{bar.val}%</span>
+                                  </div>
+                                  <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                    <div 
+                                      className={`h-full rounded-full transition-all duration-300 ${bar.isRed ? 'bg-rose-500' : 'bg-slate-800'}`} 
+                                      style={{ width: `${bar.val}%` }} 
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-slate-400 italic">No quality scorecard available for this supplier yet.</p>
+                        )}
+
+                        {/* B. Capacity Matrix */}
+                        {cap ? (
+                          <div className="border-t border-slate-200 pt-3.5 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-mono uppercase font-black text-slate-400">Line Capacity planning</span>
+                              <span className="text-[10px] font-mono text-slate-500">Lines: <strong>{cap.lineCount}</strong> • Crew: <strong>{cap.workforceCount}</strong></span>
+                            </div>
+
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-[10px] font-mono text-slate-600">
+                                <span>Utilization: <strong>{cap.bookedCapacity.toLocaleString()}</strong> / {cap.monthlyCapacity.toLocaleString()} pcs</span>
+                                <strong className={utilPercent > 85 ? 'text-rose-600' : 'text-slate-700'}>{utilPercent}% loaded</strong>
+                              </div>
+                              <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-300 ${utilPercent > 85 ? 'bg-rose-500' : 'bg-emerald-500'}`} 
+                                  style={{ width: `${Math.min(utilPercent, 100)}%` }} 
+                                />
+                              </div>
+                            </div>
+
+                            {/* C. Supplier updates capacity locally */}
+                            {isMyFactory && (
+                              <div className="border-t border-slate-200 pt-3">
+                                {updatingCapId === supplier.id ? (
+                                  <div className="flex gap-2 items-center">
+                                    <input
+                                      type="number"
+                                      placeholder="New Booked Qty"
+                                      value={newBookedCap}
+                                      onChange={(e) => setNewBookedCap(e.target.value)}
+                                      className="flex-1 bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-[11px] focus:outline-hidden"
+                                    />
+                                    <button
+                                      type="button"
+                                      disabled={isCapSubmitting}
+                                      onClick={() => handleUpdateCapacitySubmit(supplier.id, cap.monthlyCapacity)}
+                                      className="bg-slate-900 hover:bg-slate-800 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg cursor-pointer disabled:opacity-50"
+                                    >
+                                      Submit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setUpdatingCapId(null)}
+                                      className="text-slate-400 hover:text-slate-600 font-mono text-[10px] font-bold"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setUpdatingCapId(supplier.id);
+                                      setNewBookedCap(String(cap.bookedCapacity));
+                                    }}
+                                    className="w-full bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white rounded-lg py-1.5 text-[10px] font-bold transition-all cursor-pointer"
+                                  >
+                                    Update My Active Bookings
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-slate-400 italic">No capacity planning logs found for this shopfloor.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Action Bar */}

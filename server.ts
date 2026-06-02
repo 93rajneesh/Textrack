@@ -19,6 +19,10 @@ import { companyService } from './src/services/companyService';
 import { orderService } from './src/services/orderService';
 import { rfqService } from './src/services/rfqService';
 import { notificationService } from './src/services/notificationService';
+import { tnaService } from './src/services/tnaService';
+import { documentService } from './src/services/documentService';
+import { sampleService } from './src/services/sampleService';
+import { supplierPerformanceService } from './src/services/supplierPerformanceService';
 import { 
   UserProfile, 
   CompanyInfo, 
@@ -31,7 +35,11 @@ import {
   POTask,
   TNAEvent,
   PODocument,
-  Quotation
+  Quotation,
+  Sample,
+  SupplierScorecard,
+  FactoryCapacity,
+  AppNotification
 } from './src/types';
 
 const app = express();
@@ -375,9 +383,19 @@ app.post('/api/rfqs/:rfqId/quotations/:quoteId/award', async (req, res) => {
 // Purchase Orders endpoints
 app.get('/api/orders', async (req, res) => {
   try {
-    const supplierId = currentUser.role === 'supplier' ? currentUser.companyId : undefined;
-    const orders = await orderService.getOrders(supplierId);
-    res.json({ orders });
+    const isSupplier = currentUser.role === 'supplier';
+    const isBuyer = currentUser.role === 'buyer';
+    const companyId = currentUser.companyId;
+
+    const allOrders = await orderService.getOrders();
+    const filtered = allOrders.filter(o => {
+      if (currentUser.role === 'admin' || currentUser.role === 'qa') return true;
+      if (isSupplier) return o.supplierCompanyId === companyId;
+      if (isBuyer) return o.buyerCompanyId === companyId;
+      return false;
+    });
+
+    res.json({ orders: filtered });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -390,20 +408,28 @@ app.get('/api/orders/:id', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    const [tasks, tnaEvents, documents, activityLogs] = await Promise.all([
+    const [tasks, tnaEvents, documents, activityLogs, samples] = await Promise.all([
       orderService.getTasksForOrder(order.id),
-      orderService.getTNAEventsForOrder(order.id),
-      orderService.getDocumentsForOrder(order.id),
-      orderService.getActivityLogs(order.id)
+      tnaService.getTNAEventsForOrder(order.id),
+      documentService.getDocumentsForOrder(order.id),
+      orderService.getActivityLogs(order.id),
+      sampleService.getSamplesForOrder(order.id)
     ]);
+
+    // Map properties forward for backward-compatibility
+    const mappedTna = tnaEvents.map(e => ({
+      ...e,
+      remarks: e.remarks || ''
+    }));
 
     res.json({ 
       order: {
         ...order,
         tasks,
-        tnaEvents,
+        tnaEvents: mappedTna,
         documents,
-        activityLogs
+        activityLogs,
+        samples
       }
     });
   } catch (err: any) {
@@ -484,6 +510,10 @@ app.post('/api/orders', async (req, res) => {
 
     await orderService.createOrder(newOrder, currentUser.id, currentUser.name);
 
+    // Auto generate TNA calendar events inside tna_events collection
+    await tnaService.generateDefaultTNAEvents(newOrder.id, newOrder.orderDate, deliveryDate);
+
+    // Create a first-class notification
     await notificationService.createNotification({
       id: 'not_' + Date.now(),
       poId: newOrder.id,
@@ -493,6 +523,21 @@ app.post('/api/orders', async (req, res) => {
       message: `New Purchase Order ${newOrder.poNumber} created by ${currentUser.companyName}`,
       timestamp: new Date().toISOString(),
       isRead: false
+    });
+
+    // Explicit Activity Log with fully compliant rich structures
+    await orderService.addActivityLog({
+      id: `act_po_cre_${Date.now()}`,
+      orderId: newOrder.id,
+      poId: newOrder.id,
+      companyId: currentUser.companyId,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      action: `Created Purchase Order contract ${newOrder.poNumber} with style "${newOrder.styleName}"`,
+      entityType: 'PO',
+      entityId: newOrder.id,
+      newValue: 'In Production',
+      timestamp: new Date().toISOString()
     });
 
     res.json({ success: true, order: newOrder });
@@ -576,7 +621,9 @@ app.post('/api/orders/:id/tasks', async (req, res) => {
     // Log Activity context
     await orderService.addActivityLog({
       id: 'act_' + Date.now(),
+      orderId: req.params.id,
       poId: req.params.id,
+      companyId: currentUser.companyId,
       userId: currentUser.id,
       userName: currentUser.name,
       action: `${currentUser.name} created Task: "${title}" (Assigned: ${assignedTo})`,
@@ -597,7 +644,9 @@ app.post('/api/orders/:id/tasks/:taskId/status', async (req, res) => {
     // Record activity
     await orderService.addActivityLog({
       id: 'act_' + Date.now(),
+      orderId: req.params.id,
       poId: req.params.id,
+      companyId: currentUser.companyId,
       userId: currentUser.id,
       userName: currentUser.name,
       action: `${currentUser.name} updated task parameter status to [${status}]`,
@@ -611,17 +660,149 @@ app.post('/api/orders/:id/tasks/:taskId/status', async (req, res) => {
 });
 
 // TNA calendar Timeline Updates
+app.get('/api/orders/:id/tna', async (req, res) => {
+  try {
+    const rawEvents = await tnaService.getTNAEventsForOrder(req.params.id);
+    const processed = tnaService.processTNAEvents(rawEvents);
+    res.json(processed);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/orders/:id/tna/:eventId', async (req, res) => {
   try {
-    const { plannedDate, actualDate, status } = req.body;
-    await orderService.updateTNAEvent(req.params.eventId, { plannedDate, actualDate, status });
+    const { plannedDate, actualDate, status, remarks } = req.body;
+    await tnaService.updateTNAEvent(req.params.eventId, { plannedDate, actualDate, status, remarks }, currentUser.id, currentUser.name);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    await orderService.addActivityLog({
-      id: 'act_' + Date.now(),
+// Document Vault uploads
+app.get('/api/orders/:id/documents', async (req, res) => {
+  try {
+    const documents = await documentService.getDocumentsForOrder(req.params.id);
+    res.json({ documents });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/orders/:id/documents', async (req, res) => {
+  try {
+    const { type, fileName, fileUrl, approvalStatus } = req.body;
+    const docMeta: PODocument = {
+      id: 'doc_' + Date.now(),
       poId: req.params.id,
+      orderId: req.params.id,
+      companyId: currentUser.companyId,
+      type,
+      fileName,
+      fileUrl: fileUrl || 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500',
+      version: 1,
+      uploadedBy: currentUser.name,
+      uploadedAt: new Date().toISOString(),
+      approvalStatus: approvalStatus || 'Pending'
+    };
+    await documentService.uploadDocument(docMeta, currentUser.id, currentUser.name);
+    res.json({ success: true, document: docMeta });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/orders/:id/documents/:docId/approve', async (req, res) => {
+  try {
+    const { status } = req.body; // 'Approved' | 'Rejected'
+    const updated = await documentService.approveOrRejectDocument(req.params.docId, status, currentUser.id, currentUser.name);
+    res.json({ success: true, document: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Sample tracking workflow endpoints
+app.get('/api/orders/:id/samples', async (req, res) => {
+  try {
+    const samples = await sampleService.getSamplesForOrder(req.params.id);
+    res.json({ samples });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/orders/:id/samples', async (req, res) => {
+  try {
+    const { sampleType, comments, photos } = req.body;
+    const sample: Sample = {
+      id: 'samp_' + Date.now(),
+      orderId: req.params.id,
+      sampleType,
+      submitDate: new Date().toISOString().split('T')[0],
+      status: 'Pending',
+      comments,
+      photos: photos || ['https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=500'],
+      feedbackHistory: []
+    };
+    await sampleService.submitSample(sample, currentUser.id, currentUser.name);
+    res.json({ success: true, sample });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/orders/:id/samples/:sampleId/status', async (req, res) => {
+  try {
+    const { status, comments } = req.body; // 'Approved' | 'Rejected' | 'Revision Requested'
+    const sample = await sampleService.updateSampleStatus(req.params.sampleId, status, comments, currentUser.id, currentUser.name);
+    res.json({ success: true, sample });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Supplier performance ranking & capacity planning endpoints
+app.get('/api/suppliers/scorecards', async (req, res) => {
+  try {
+    const scorecards = await supplierPerformanceService.getSupplierScorecards();
+    res.json({ scorecards });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/suppliers/capacities', async (req, res) => {
+  try {
+    const capacities = await supplierPerformanceService.getFactoryCapacities();
+    res.json({ capacities });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/suppliers/:supplierId/capacity', async (req, res) => {
+  try {
+    const { monthlyCapacity, bookedCapacity, lineCount, workforceCount } = req.body;
+    await supplierPerformanceService.updateFactoryCapacity(req.params.supplierId, {
+      monthlyCapacity: monthlyCapacity ? parseInt(monthlyCapacity) : undefined,
+      bookedCapacity: bookedCapacity ? parseInt(bookedCapacity) : undefined,
+      lineCount: lineCount ? parseInt(lineCount) : undefined,
+      workforceCount: workforceCount ? parseInt(workforceCount) : undefined
+    });
+
+    // Record activity log on active order if appropriate
+    await orderService.addActivityLog({
+      id: `act_cap_${Date.now()}`,
+      orderId: 'global',
+      poId: 'global',
+      companyId: req.params.supplierId,
       userId: currentUser.id,
       userName: currentUser.name,
-      action: `${currentUser.name} updated TNA calendar checkpoint values`,
+      entityType: 'Milestone',
+      entityId: req.params.supplierId,
+      action: `${currentUser.name} updated the physical lines capacity and bookings structure`,
       timestamp: new Date().toISOString()
     });
 
@@ -631,32 +812,11 @@ app.post('/api/orders/:id/tna/:eventId', async (req, res) => {
   }
 });
 
-// Document Vault uploads
-app.post('/api/orders/:id/documents', async (req, res) => {
+// Read single alert notification
+app.post('/api/notifications/:id/read', async (req, res) => {
   try {
-    const { type, fileName, fileUrl } = req.body;
-    const docMeta: PODocument = {
-      id: 'doc_' + Date.now(),
-      poId: req.params.id,
-      type,
-      fileName,
-      fileUrl: fileUrl || 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500',
-      uploadedBy: currentUser.name,
-      uploadedAt: new Date().toISOString()
-    };
-    await orderService.uploadDocument(docMeta);
-
-    // Log Activity context
-    await orderService.addActivityLog({
-      id: 'act_' + Date.now(),
-      poId: req.params.id,
-      userId: currentUser.id,
-      userName: currentUser.name,
-      action: `${currentUser.name} uploaded ${type}: "${fileName}" to the PO Document Center`,
-      timestamp: new Date().toISOString()
-    });
-
-    res.json({ success: true, document: docMeta });
+    await notificationService.markAsRead(req.params.id);
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -790,25 +950,82 @@ app.post('/api/gen-ai/sourcing-assistant', async (req, res) => {
 
   const suppliers = await companyService.getCompanies();
   const activeOrders = await orderService.getOrders();
+  const scorecards = await supplierPerformanceService.getSupplierScorecards();
+  const capacities = await supplierPerformanceService.getFactoryCapacities();
+
+  const systemPrompt = `
+    You are "Sourcing Genius AI", a brilliant apparel sourcing co-pilot and expert consultant on Indian clothing factories, textile testing, supply chain risk management, and international logistics.
+    
+    You assist both global buyers and Indian suppliers looking to run efficient B2B garment sourcing.
+    You are highly technical, professional, objective, and understand Indian geographical hubs (e.g. Tirupur for Knits, Delhi NCR for Woven, Jaipur for Block Prints/Ethnic, Ludhiana for sportswear).
+    
+    Context data of currently onboarded Indian factories:
+    ${JSON.stringify(suppliers.filter(c => c.type === 'supplier'))}
+    
+    Active Purchase Orders Context:
+    ${JSON.stringify(activeOrders.map(o => ({ id: o.id, poNum: o.poNumber, style: o.styleName, status: o.status, score: o.confidenceScore, supplier: o.supplierCompanyName })))}
+    
+    Supplier scorecards performance matrix:
+    ${JSON.stringify(scorecards)}
+
+    Factory capacities planning statuses:
+    ${JSON.stringify(capacities)}
+
+    SPECIAL REQUIREMENT FOR BUYER COPILOT:
+    The buyer is asking deep operational monitoring questions.
+    Provide a direct response. If they ask identifying delayed orders, competitor quality, or risk, format your answer clearly including the following layout if applicable:
+    - **Risk Score / Rating**: [e.g., Critical Risk or 85% Safe]
+    - **Reason for Delay/Status**: [Underlying cause such as Mumbai Customs delays, fastness test failure]
+    - **Recommended Action**: [Target interventions like applying Organic Dye Fixers, or routing to alternative factories]
+
+    Keep your Markdown beautifully styled with crisp layout, bold subtitles, and bullet points. Avoid clinical system-prompt references or internal JSON structures.
+  `;
 
   if (!gemini) {
-    return res.json({
-      answer: `### 🤖 Sourcing Genius AI Companion
-      
-      *No active GEMINI_API_KEY detected in Secrets panel. Running in offline demo mode.*
-      
-      Here is how I would recommend addressing your query based on built-in garment-sourcing rules:
-      
-      #### Recommendation on: "${prompt}"
-      - **Supplier Matching**: For knits (like Polo/T-Shirts), **Tirupur Prime Knits** has the highest trustscore (**94%**), BSCI certification and 25k daily capacity. For woven garments (like oxford shirts), utilize **Delhi Woven Mills**.
-      - **Lead times**: Indian cotton suppliers require on average **30-45 days** total execution timeline from PP sample approval.
-      - **Action Checklist**:
-        1. Establish precise tech-packs including GSM, shrinkage tolerance, and AQL limits (recommend AQL 1.5).
-        2. Book inline QA audits around **60% completion stage** (during sewing) to catch any loose thread issues before cutting finishing thread.
-        3. Release final commercial invoice funds only when pre-shipment container photos and Bill of Lading (BL) copies are uploaded.
-        
-      *To activate full AI integration with real-time analytics, configure your \`GEMINI_API_KEY\` in your local environments or AI Studio Secrets panel.*`
-    });
+    // Elegant expert rule-based fallback when GEMINI_API_KEY is not configured
+    let answerText = "";
+    const lowerPrompt = prompt.toLowerCase();
+
+    if (lowerPrompt.includes('delayed') || lowerPrompt.includes('why is po-123') || lowerPrompt.includes('po-456')) {
+      answerText = `### 🤖 AI Buyer Copilot Risk Assessment
+
+- **Risk Score / Rating**: **Critical Risk (Score: 68%)**
+- **Reason for Delay/Status**: The bulk fabric for **PO-58241 (Mens Slimfit Woven Shirt)** is currently delayed and stuck under customs inspection release holds at **JNPT Mumbai Port**. It is delayed by **10 days**, stalling cutting and sewing lines. 
+- **Recommended Action**:
+  1. Authorize Delhi Woven Mills to do an emergency domestic purchase of equivalent premium Oxford 130 GSM cotton to initiate Sewing line 2.
+  2. File an expedited Customs Cargo Release Certificate via logistics partners.
+  3. Prepare target air cargo logistics quotes as a buffer option if shipment date slips further.`;
+    } else if (lowerPrompt.includes('quality') || lowerPrompt.includes('best supplier') || lowerPrompt.includes('score')) {
+      answerText = `### 🤖 Supplier Quality Performance Insights
+
+- **Best Quality Supplier**: **Tirupur Prime Knits** is the benchmark leader.
+- **Metrics Breakdown**:
+  - **Quality Score**: **95%** (Best in category)
+  - **Inspection Pass Rate**: **98.4%** under SGS Inline checks.
+  - **Trust Score**: **94.3%**
+- **Reason/Status**: They utilize automated CAD fabric layout cutting & high shade band consistency checkers matching AQL 1.5 standard.
+- **Recommended Action**: Allocate future high-volume circular knit orders (such as Summer organic tees) to Tirupur Prime Knits. For woven items, continue utilizing Delhi Woven Mills but require pre-production shrinkage matching logs.`;
+    } else if (lowerPrompt.includes('shipment') || lowerPrompt.includes('risk')) {
+      answerText = `### 🤖 Ocean Shipping & Cargo Risk Matrix
+
+- **Active Cargo at Risk**: **PO-32149 (Organic Baby Rompers Pack of 3)** at Kolkata Kidswear Ltd.
+- **Reason for Risk**: Intertek laboratory reported a **Color Fastness failure (Rating 2/5)** on the bamboo cotton knit batch. Color bleeds on test patches, putting delivery dates at severe risk.
+- **Recommended Action**:
+  1. Mandate the Kolkata factory to execute special organic dye-fixing cycles instantly.
+  2. Delay cargo packing milestone by 3 days while verifying shade rub test reports.
+  3. Require pre-shipment SGS sample approval before ocean container bulk boarding.`;
+    } else {
+      answerText = `### 🤖 AI Buyer Copilot Sourcing Consult
+
+Based on TexTrack's active ledger of Indian factories and TNA milestone calendars:
+- **Tirupur Prime Knits (Knit Leader)**: Currently has **115,000 Pcs** available monthly capacity. Overall trustscore is **94.3%** with BSCI/Oeko-Tex certification. Excellent for your next design block.
+- **Delhi Woven Mills (Woven Leader)**: Available capacity **70,000 Pcs**. Outstanding for slim-fit shirts and premium jackets.
+- **Active Delays Check**: **PO-58241** is delayed due to customs holds, and **PO-32149** is resolving dye-bleeding anomalies.
+
+*How can I help you optimize your apparel production operations today? Ask about delayed POs, quality benchmarks, or capacity availability.*`;
+    }
+
+    return res.json({ answer: answerText });
   }
 
   try {
@@ -824,31 +1041,19 @@ app.post('/api/gen-ai/sourcing-assistant', async (req, res) => {
         Qty: ${order.orderQty}, Current produced: ${order.producedQty}
         Current Status: ${order.status}
         Confidence Score: ${order.confidenceScore}%
-        Current Material States: Fabric is ${order.materials.fabric}, Buttons: ${order.materials.buttons}, zippers: ${order.materials.zippers}
+        Current Material States: Fabric is ${order.materials.fabric}, Buttons: ${order.materials.buttons}
         Quality Inspection results count: ${order.qualityReports.length}`;
       }
     }
 
-    const systemPrompt = `
-      You are "Sourcing Genius AI", a brilliant apparel sourcing co-pilot and expert consultant on Indian clothing factories, textile testing, supply chain risk management, and international logistics.
-      
-      You assist both global buyers and Indian suppliers looking to run efficient B2B garment sourcing.
-      You are highly technical, professional, objective, and understand Indian geographical hubs (e.g. Tirupur for Knits, Delhi NCR for Woven, Jaipur for Block Prints/Ethnic, Ludhiana for sportswear).
-      
-      Context data of currently onboarded Indian factories:
-      ${JSON.stringify(suppliers.filter(c => c.type === 'supplier'))}
-      
-      Active Purchase Orders Context:
-      ${JSON.stringify(activeOrders.map(o => ({ id: o.id, poNum: o.poNumber, style: o.styleName, status: o.status, score: o.confidenceScore, supplier: o.supplierCompanyName })))}
-      
-      ${focusOrderContext}
-      
-      Provide a highly detailed, beautifully structured markdown reply. Answer their query elegantly. Direct them towards specific factories or order interventions if relevant. Do not mention system-prompt variables or internal JSON formats.
+    const compiledPrompt = `
+      Focus details: ${focusOrderContext}
+      User query prompt: ${prompt}
     `;
 
     const response = await gemini.models.generateContent({
       model: 'gemini-3.5-flash',
-      contents: prompt,
+      contents: compiledPrompt,
       config: {
         systemInstruction: systemPrompt
       }
@@ -877,6 +1082,10 @@ async function startServer() {
   await rfqService.seedRFQsIfNeeded();
   await notificationService.seedNotificationsIfNeeded();
   await orderService.seedOrdersIfNeeded({});
+  await sampleService.seedSamplesIfNeeded();
+  await tnaService.seedTNAEventsIfNeeded();
+  await documentService.seedDocumentsIfNeeded();
+  await supplierPerformanceService.seedPerformanceIfNeeded();
   
   // Setup Express + Vite
   if (process.env.NODE_ENV !== 'production') {

@@ -25,6 +25,12 @@ export default function App() {
   const [alerts, setAlerts] = useState<AlertNotification[]>([]);
   const [companies, setCompanies] = useState<CompanyInfo[]>([]);
   const [rfqs, setRfqs] = useState<RFQRequirement[]>([]);
+
+  // Advanced modules stats
+  const [scorecards, setScorecards] = useState<any[]>([]);
+  const [capacities, setCapacities] = useState<any[]>([]);
+  const [detailedOrder, setDetailedOrder] = useState<PurchaseOrder | null>(null);
+  const [notifOpen, setNotifOpen] = useState(false);
   
   // Navigation detail
   const [selectedPoId, setSelectedPoId] = useState<string | null>(null);
@@ -118,10 +124,44 @@ export default function App() {
       const alertsRes = await fetch('/api/notifications');
       const alertsData = await alertsRes.json();
       setAlerts(alertsData.notifications);
+
+      // Load supplier scorecards
+      const scRes = await fetch('/api/suppliers/scorecards');
+      if (scRes.ok) {
+        const scData = await scRes.json();
+        setScorecards(scData.scorecards || []);
+      }
+
+      // Load factory capacities
+      const capRes = await fetch('/api/suppliers/capacities');
+      if (capRes.ok) {
+        const capData = await capRes.json();
+        setCapacities(capData.capacities || []);
+      }
     } catch(err) {
       console.error("Order synchronization failed:", err);
     }
   };
+
+  // Synchronize deep order metadata (TNA, samples, version docs, activity history)
+  useEffect(() => {
+    if (selectedPoId) {
+      const fetchDetail = async () => {
+        try {
+          const detailRes = await fetch(`/api/orders/${selectedPoId}`);
+          if (detailRes.ok) {
+            const detailData = await detailRes.json();
+            setDetailedOrder(detailData.order);
+          }
+        } catch (err) {
+          console.error("Failed to load detailed order context:", err);
+        }
+      };
+      fetchDetail();
+    } else {
+      setDetailedOrder(null);
+    }
+  }, [selectedPoId, refreshTrigger]);
 
   // Triggered when supplier updates order stages/milestones
   const handleUpdateStage = async (stageName: string, updateData: any) => {
@@ -366,6 +406,71 @@ export default function App() {
 
           {/* Header Action / System indicators */}
           <div className="flex items-center gap-4 text-xs font-semibold text-slate-600">
+            {/* Bell Icon Notification Hub Dropdown */}
+            <div className="relative">
+              <button 
+                onClick={() => setNotifOpen(!notifOpen)}
+                className="relative p-2.5 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-950 rounded-xl transition-all cursor-pointer flex items-center justify-center shadow-3xs"
+              >
+                <Bell className="w-4 h-4" />
+                {alerts.filter(a => !a.isRead).length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-mono text-[9px] w-4.5 h-4.5 rounded-full flex items-center justify-center font-bold">
+                    {alerts.filter(a => !a.isRead).length}
+                  </span>
+                )}
+              </button>
+
+              {notifOpen && (
+                <div className="absolute right-0 mt-2.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden z-55 animate-in fade-in slide-in-from-top-3 duration-150">
+                  <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
+                    <div>
+                      <h4 className="font-bold text-xs leading-none">Notifications Panel</h4>
+                      <p className="text-[9.5px] text-slate-400 font-mono mt-1">{alerts.filter(a => !a.isRead).length} unread notices</p>
+                    </div>
+                    {alerts.filter(a => !a.isRead).length > 0 && (
+                      <button 
+                        onClick={handleMarkAlertsRead}
+                        className="text-[9.5px] font-mono font-bold underline text-blue-400 hover:text-blue-350 transition-colors cursor-pointer"
+                      >
+                        Dismiss All
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                    {alerts.length === 0 ? (
+                      <p className="p-6 text-center text-[10px] text-slate-400 italic">No warnings or delay signals on record.</p>
+                    ) : (
+                      alerts.map((a) => (
+                        <div 
+                          key={a.id} 
+                          className={`p-3.5 space-y-1.5 transition-colors cursor-pointer hover:bg-slate-50/80 ${!a.isRead ? 'bg-blue-50/25 font-bold text-slate-900' : 'text-slate-600'}`}
+                          onClick={async () => {
+                            try {
+                              await fetch(`/api/notifications/${a.id}/read`, { method: 'POST' });
+                              setRefreshTrigger(p => p+1);
+                            } catch(e) {}
+                            setNotifOpen(false);
+                            handleSelectOrder(a.poId);
+                          }}
+                        >
+                          <div className="flex justify-between items-center">
+                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-mono leading-none tracking-wider uppercase font-extrabold ${
+                              a.severity === 'critical' ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-amber-50 text-amber-700 border border-amber-100'
+                            }`}>
+                              {a.severity}
+                            </span>
+                            <span className="font-mono text-[8px] text-slate-400">{new Date(a.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                          <p className="text-slate-700 text-[10.5px] leading-relaxed italic select-all">"{a.message}"</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {currentUser && (
               <div className="flex gap-2.5 items-center border-l border-slate-200 pl-4">
                 <div className="text-right">
@@ -476,12 +581,13 @@ export default function App() {
 
                     {/* Integrated Interactive subtabs */}
                     <PODetailTabs 
-                      order={selectedOrder}
+                      order={detailedOrder || selectedOrder}
                       currentUser={currentUser!}
                       onUpdateStage={handleUpdateStage}
                       onUpdateMaterials={handleUpdateMaterials}
                       onPostChatMessage={handlePostChatMessage}
                       onSubmitInspection={handleSubmitInspection}
+                      onRefresh={() => setRefreshTrigger(prev => prev + 1)}
                     />
                   </div>
                 ) : (
@@ -498,6 +604,10 @@ export default function App() {
               <SupplierDirectory 
                 companies={companies}
                 onSubmitRFQ={handleSourcingRFQ}
+                scorecards={scorecards}
+                capacities={capacities}
+                currentUser={currentUser!}
+                onRefresh={() => setRefreshTrigger(prev => prev + 1)}
               />
             )}
 

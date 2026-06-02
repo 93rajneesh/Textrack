@@ -9,6 +9,10 @@ import {
   CheckCircle2, Clock, Play, AlertTriangle, FileText, Send, Paperclip, 
   Settings, Award, RefreshCw, BarChart2, Plus, Calendar, Camera, Info, ThumbsUp, Activity
 } from 'lucide-react';
+import TNACalendarTab from './TNACalendarTab';
+import SampleTrackingTab from './SampleTrackingTab';
+import DocumentCenterTab from './DocumentCenterTab';
+import ActivityTimelineTab from './ActivityTimelineTab';
 
 interface PODetailTabsProps {
   order: PurchaseOrder;
@@ -17,6 +21,7 @@ interface PODetailTabsProps {
   onUpdateMaterials: (materials: any) => void;
   onPostChatMessage: (msgText: string, filename?: string, url?: string) => void;
   onSubmitInspection: (report: any) => void;
+  onRefresh?: () => void;
 }
 
 export default function PODetailTabs({ 
@@ -25,9 +30,11 @@ export default function PODetailTabs({
   onUpdateStage, 
   onUpdateMaterials,
   onPostChatMessage,
-  onSubmitInspection
+  onSubmitInspection,
+  onRefresh = () => {}
 }: PODetailTabsProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'timeline' | 'chat' | 'quality' | 'documents'>('timeline');
+  const [activeSubTab, setActiveSubTab] = useState<'timeline' | 'tna' | 'samples' | 'chat' | 'quality' | 'documents_custom' | 'audit_feed'>('timeline');
+
 
   // Stage Update states
   const [editingStage, setEditingStage] = useState<string | null>(null);
@@ -129,14 +136,17 @@ export default function PODetailTabs({
       <div className="border-b border-slate-200 flex flex-wrap bg-slate-50/50">
         {[
           { key: 'timeline', label: 'Timeline & Tracking', count: order.stages.filter(s => s.status === 'completed').length + '/' + order.stages.length },
+          { key: 'tna', label: 'TNA Calendar', count: (order as any).tnaEvents?.length ?? 0 },
+          { key: 'samples', label: 'Style Samples', count: (order as any).samples?.length ?? 0 },
           { key: 'chat', label: 'Communication Hub', count: order.chat.length },
           { key: 'quality', label: 'QC & Inspections', count: order.qualityReports.length },
-          { key: 'documents', label: 'Document Locker', count: 5 }
+          { key: 'documents_custom', label: 'Document Vault', count: (order as any).documents?.length ?? 0 },
+          { key: 'audit_feed', label: 'Audit Trail', count: (order as any).activityLogs?.length ?? 0 }
         ].map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveSubTab(tab.key as any)}
-            className={`px-5 py-3.5 text-xs font-semibold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
+            className={`px-4.5 py-3.5 text-xs font-semibold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
               activeSubTab === tab.key 
                 ? 'border-blue-600 text-blue-600 bg-white' 
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -151,6 +161,7 @@ export default function PODetailTabs({
       </div>
 
       <div className="p-6">
+
         {/* ----------------- 1. TIMELINE & TRACKING VIEW ----------------- */}
         {activeSubTab === 'timeline' && (
           <div className="space-y-6" id="po-workspace-timeline">
@@ -753,37 +764,45 @@ export default function PODetailTabs({
           </div>
         )}
 
-        {/* ----------------- 4. DOCUMENT LOCKER VIEW ----------------- */}
-        {activeSubTab === 'documents' && (
-          <div className="space-y-4" id="documents-grid-locker">
-            <div>
-              <h4 className="font-bold text-xs text-slate-900 uppercase">Interactive file vault</h4>
-              <p className="text-[11px] text-slate-400 mt-0.5">Secure, transparent ledger of PDF style tech-packs and inspection reports</p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 font-sans text-xs">
-              {[
-                { name: 'Apparel_TechPack_ Pacific_Blue.pdf', size: '1.4 MB', type: 'PDF Spec sheet', date: '2026-05-02', label: 'Tech Pack' },
-                { name: 'Purchase_Order_TGT_75912.pdf', size: '480 KB', type: 'Merchant PO', date: '2026-05-01', label: 'Commercial Contract' },
-                { name: 'Pre_Production_Sample_Evidence.zip', size: '6.8 MB', type: 'Sample Media Archive', date: '2026-05-03', label: 'Sourcing Photo' },
-                { name: 'SGS_Inline_Inspection_Aqua_Pacific.pdf', size: '1.2 MB', type: 'BSCI Audit', date: '2026-05-18', label: 'QC Audit' },
-                { name: 'Bill_Of_Lading_MSCU9182.pdf', size: '890 KB', type: 'Shipping Doc', date: 'Pending', label: 'Logistics' }
-              ].map((doc, idx) => (
-                <div key={idx} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between hover:border-slate-350 transition-all group shadow-2xs">
-                  <div className="space-y-2">
-                    <span className="text-[9px] uppercase font-mono tracking-wider px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold inline-block">{doc.label}</span>
-                    <h5 className="font-bold text-slate-800 text-[11px] group-hover:text-blue-700 truncate">{doc.name}</h5>
-                    <p className="text-[10px] text-slate-400">{doc.type} • {doc.size}</p>
-                  </div>
-                  <div className="border-t border-slate-150 pt-2 flex items-center justify-between text-[10px] text-slate-400 mt-3 font-mono">
-                    <span>Uploaded: {doc.date}</span>
-                    <span className="text-blue-600 underline font-semibold cursor-pointer">Preview Mocks</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+        {/* ----------------- TNA CALENDAR VIEW ----------------- */}
+        {activeSubTab === 'tna' && (
+          <TNACalendarTab 
+            poId={order.id} 
+            milestones={(order as any).tnaEvents || []} 
+            currentUser={currentUser} 
+            onRefresh={onRefresh} 
+          />
         )}
+
+        {/* ----------------- STYLE SAMPLES PIPELINE VIEW ----------------- */}
+        {activeSubTab === 'samples' && (
+          <SampleTrackingTab 
+            poId={order.id} 
+            samples={(order as any).samples || []} 
+            currentUser={currentUser} 
+            onRefresh={onRefresh} 
+          />
+        )}
+
+        {/* ----------------- DOCUMENT LOCKER REVISED VIEW ----------------- */}
+        {activeSubTab === 'documents_custom' && (
+          <DocumentCenterTab 
+            poId={order.id} 
+            documents={(order as any).documents || []} 
+            currentUser={currentUser} 
+            onRefresh={onRefresh} 
+          />
+        )}
+
+        {/* ----------------- AUDIT FEED VIEW ----------------- */}
+        {activeSubTab === 'audit_feed' && (
+          <ActivityTimelineTab 
+            poId={order.id} 
+            logs={(order as any).activityLogs || []} 
+            onRefresh={onRefresh} 
+          />
+        )}
+
       </div>
     </div>
   );
