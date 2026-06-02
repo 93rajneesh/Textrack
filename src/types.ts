@@ -24,7 +24,7 @@ export interface CompanyInfo {
   contactEmail: string;
   logo: string;
   rating: number;
-  trustScore: number;
+  trustScore: number; // calculated automatically: (otd * 0.4) + (quality * 0.3) + (response * 0.2) + (repeat * 0.1)
   certifications: string[];
   productCategories: string[];
   stitchingCapacityPerDay: number;
@@ -33,6 +33,23 @@ export interface CompanyInfo {
   leadTimeDays: number;
   exportMarkets: string[];
   location: string;
+  
+  // Dynamic supplier capacity tracking
+  monthlyCapacity?: number;
+  currentBookedCapacity?: number;
+  availableCapacity?: number;
+
+  // Trust score parameters
+  otd?: number; // On-Time Delivery % (0 - 100)
+  qualityPerformance?: number; // QA inspection pass rate % (0 - 100)
+  responseTime?: number; // Response time score (0 - 100)
+  repeatOrdersRate?: number; // Repeat orders rate % (0 - 100)
+
+  // Factory verification details
+  auditStatus?: 'Verified' | 'Pending' | 'Not Audited';
+  auditDate?: string;
+  factoryPhotos?: string[];
+  videos?: string[];
 }
 
 export type StageName = 
@@ -63,6 +80,8 @@ export interface ProductionStage {
 
 export type OrderStatus = 'In Production' | 'Ready to Ship' | 'On Water' | 'Completed' | 'Delayed';
 
+export type ChatMessageType = 'text' | 'image' | 'document' | 'approval' | 'system';
+
 export interface ChatMessage {
   id: string;
   senderId: string;
@@ -72,6 +91,7 @@ export interface ChatMessage {
   timestamp: string;
   attachmentUrl?: string;
   attachmentName?: string;
+  messageType?: ChatMessageType;
 }
 
 export interface QualityReport {
@@ -152,3 +172,59 @@ export interface SourcingAssistantResponse {
   translatedMessage?: string;
   suggestedAction?: string;
 }
+
+// Global Activity / Audit trail collection
+export interface ActivityLog {
+  id: string;
+  poId: string;
+  userId: string;
+  userName: string;
+  action: string; // e.g. "Rajneesh uploaded PP sample"
+  timestamp: string;
+}
+
+// Milestone action items per PO
+export interface POTask {
+  id: string;
+  poId: string;
+  title: string; // e.g. "Approve Lab Dip"
+  assignedTo: string; // e.g. "Buyer" or "Supplier" or "QA"
+  dueDate: string;
+  status: 'Pending' | 'In Progress' | 'Completed';
+}
+
+// Time-and-Action Event for calendar
+export interface TNAEvent {
+  id: string;
+  poId: string;
+  name: string; // e.g. "Lab Dip", "PP Sample", etc.
+  plannedDate: string;
+  actualDate?: string;
+  owner?: string; // "Buyer", "Supplier", "QA" etc.
+  status: 'Pending' | 'On Track' | 'Completed' | 'Delayed';
+}
+
+// Document vault index per PO
+export interface PODocument {
+  id: string;
+  poId: string;
+  type: 'PO' | 'Tech Pack' | 'BOM' | 'Lab Dip' | 'PP Sample' | 'Inspection Report' | 'Invoice' | 'Packing List';
+  fileUrl: string;
+  fileName: string;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+// Supplier bids responding to active RFQs
+export interface Quotation {
+  id: string;
+  rfqId: string;
+  supplierCompanyId: string;
+  supplierCompanyName: string;
+  quotedPrice: number;
+  promisedLeadTimeDays: number;
+  notes: string;
+  status: 'Pending' | 'Accepted' | 'Rejected';
+  createdAt: string;
+}
+

@@ -1,0 +1,234 @@
+{
+  "entities": {
+    "users": {
+      "title": "UserProfile",
+      "description": "User profiles registered in the system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["buyer", "supplier", "qa", "admin"] },
+        "companyId": { "type": "string" },
+        "companyName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "companies": {
+      "title": "CompanyInfo",
+      "description": "Companies including buyers, factories (suppliers), labs, and logistics",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["buyer", "supplier", "lab", "logistics"] },
+        "country": { "type": "string" },
+        "contactEmail": { "type": "string" },
+        "logo": { "type": "string" },
+        "rating": { "type": "number" },
+        "trustScore": { "type": "number" },
+        "certifications": { "type": "array" },
+        "productCategories": { "type": "array" },
+        "stitchingCapacityPerDay": { "type": "number" },
+        "noOfMachines": { "type": "number" },
+        "moq": { "type": "number" },
+        "leadTimeDays": { "type": "number" },
+        "exportMarkets": { "type": "array" },
+        "location": { "type": "string" },
+        "monthlyCapacity": { "type": "number" },
+        "currentBookedCapacity": { "type": "number" },
+        "availableCapacity": { "type": "number" },
+        "auditStatus": { "type": "string" },
+        "auditDate": { "type": "string" },
+        "factoryPhotos": { "type": "array" },
+        "videos": { "type": "array" }
+      },
+      "required": ["id", "name", "type"]
+    },
+    "orders": {
+      "title": "PurchaseOrder",
+      "description": "Sourcing procurement purchase orders",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "poNumber": { "type": "string" },
+        "styleName": { "type": "string" },
+        "buyerCompanyId": { "type": "string" },
+        "buyerCompanyName": { "type": "string" },
+        "supplierCompanyId": { "type": "string" },
+        "supplierCompanyName": { "type": "string" },
+        "orderQty": { "type": "number" },
+        "producedQty": { "type": "number" },
+        "unitPrice": { "type": "number" },
+        "orderDate": { "type": "string" },
+        "deliveryDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["In Production", "Ready to Ship", "On Water", "Completed", "Delayed"] },
+        "fabricType": { "type": "string" },
+        "color": { "type": "string" },
+        "sizeRange": { "type": "string" },
+        "confidenceScore": { "type": "number" },
+        "vesselName": { "type": "string" },
+        "containerNo": { "type": "string" },
+        "etd": { "type": "string" },
+        "eta": { "type": "string" },
+        "shipmentStatus": { "type": "string" },
+        "stages": { "type": "array" },
+        "materials": { "type": "object" },
+        "qualityReports": { "type": "array" }
+      },
+      "required": ["id", "poNumber", "styleName", "buyerCompanyId", "supplierCompanyId"]
+    },
+    "activity_logs": {
+      "title": "ActivityLog",
+      "description": "B2B operations and audit logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "poId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "poId", "action", "timestamp"]
+    },
+    "po_tasks": {
+      "title": "POTask",
+      "description": "Milestone action items for a given Purchase Order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "poId": { "type": "string" },
+        "title": { "type": "string" },
+        "assignedTo": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "In Progress", "Completed"] }
+      },
+      "required": ["id", "poId", "title", "assignedTo", "status"]
+    },
+    "tna_events": {
+      "title": "TNAEvent",
+      "description": "Time-and-Action calendar event tracking for garments production",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "poId": { "type": "string" },
+        "name": { "type": "string" },
+        "plannedDate": { "type": "string" },
+        "actualDate": { "type": "string" },
+        "owner": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "On Track", "Completed", "Delayed"] }
+      },
+      "required": ["id", "poId", "name", "plannedDate", "status"]
+    },
+    "po_documents": {
+      "title": "PODocument",
+      "description": "Apparel spec sheets, lab dips, audits, and commercial invoices",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "poId": { "type": "string" },
+        "type": { "type": "string", "enum": ["PO", "Tech Pack", "BOM", "Lab Dip", "PP Sample", "Inspection Report", "Invoice", "Packing List"] },
+        "fileUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "uploadedBy": { "type": "string" },
+        "uploadedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "poId", "type", "fileUrl"]
+    },
+    "rfqs": {
+      "title": "RFQRequirement",
+      "description": "Requests for quotations published by apparel buyers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "styleName": { "type": "string" },
+        "productCategory": { "type": "string" },
+        "targetPrice": { "type": "number" },
+        "orderQty": { "type": "number" },
+        "fabricType": { "type": "string" },
+        "leadTimeDays": { "type": "number" },
+        "buyerCompanyName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Open", "Quoted", "Accepted"] }
+      },
+      "required": ["id", "styleName", "targetPrice", "orderQty"]
+    },
+    "quotations": {
+      "title": "Quotation",
+      "description": "Supplier bid proposals responding to an active RFQ",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "rfqId": { "type": "string" },
+        "supplierCompanyId": { "type": "string" },
+        "supplierCompanyName": { "type": "string" },
+        "quotedPrice": { "type": "number" },
+        "promisedLeadTimeDays": { "type": "number" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Accepted", "Rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "rfqId", "supplierCompanyId", "quotedPrice"]
+    },
+    "notifications": {
+      "title": "AlertNotification",
+      "description": "Critical alerts and tracking notifications on PO status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "poId": { "type": "string" },
+        "poNumber": { "type": "string" },
+        "type": { "type": "string", "enum": ["delay", "quality", "material", "info"] },
+        "severity": { "type": "string", "enum": ["critical", "warning", "info"] },
+        "message": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "isRead": { "type": "boolean" }
+      },
+      "required": ["id", "poId", "message", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "Registration documents with specific roles"
+    },
+    "/companies/{companyId}": {
+      "schema": "companies",
+      "description": "Registered partners (both brand retailers and manufacturing plants)"
+    },
+    "/orders/{orderId}": {
+      "schema": "orders",
+      "description": "Production purchase contracts"
+    },
+    "/activity_logs/{logId}": {
+      "schema": "activity_logs",
+      "description": "Audit trails for operations transparency"
+    },
+    "/po_tasks/{taskId}": {
+      "schema": "po_tasks",
+      "description": "Action checkpoints assigned to supplier or buyer"
+    },
+    "/tna_events/{eventId}": {
+      "schema": "tna_events",
+      "description": "Garment manufacturing Time-and-Action events"
+    },
+    "/po_documents/{docId}": {
+      "schema": "po_documents",
+      "description": "Document vault center associated with order contracts"
+    },
+    "/rfqs/{rfqId}": {
+      "schema": "rfqs",
+      "description": "Sourcing queries raised by retail brands"
+    },
+    "/quotations/{quotationId}": {
+      "schema": "quotations",
+      "description": "Negotiation bids submitted by manufacturing plants"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "notifications",
+      "description": "Broadcast alerts and shopfloor warnings"
+    }
+  }
+}

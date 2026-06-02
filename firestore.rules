@@ -1,0 +1,182 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default catch-all to prevent unauthenticated data leaks
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- REUSABLE SECURITY PRIMITIVES ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- ENTITY-LEVEL INVARIANT BLUEPRINTS ---
+
+    function isValidUser(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.name is string && data.name.size() <= 100
+          && data.email is string && data.email.size() <= 100
+          && data.role is string && (data.role == 'buyer' || data.role == 'supplier' || data.role == 'qa' || data.role == 'admin');
+    }
+
+    function isValidCompany(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.name is string && data.name.size() <= 150
+          && data.type is string && (data.type == 'buyer' || data.type == 'supplier' || data.type == 'lab' || data.type == 'logistics');
+    }
+
+    function isValidOrder(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.poNumber is string && data.poNumber.size() <= 50
+          && data.styleName is string && data.styleName.size() <= 150
+          && data.buyerCompanyId is string && data.buyerCompanyId.size() <= 128
+          && data.supplierCompanyId is string && data.supplierCompanyId.size() <= 128;
+    }
+
+    function isValidActivityLog(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.poId is string && data.poId.size() <= 128
+          && data.action is string && data.action.size() <= 500;
+    }
+
+    function isValidTask(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.poId is string && data.poId.size() <= 128
+          && data.title is string && data.title.size() <= 200
+          && data.status is string && (data.status == 'Pending' || data.status == 'In Progress' || data.status == 'Completed');
+    }
+
+    function isValidTNAEvent(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.poId is string && data.poId.size() <= 128
+          && data.name is string && data.name.size() <= 100
+          && data.status is string && (data.status == 'Pending' || data.status == 'On Track' || data.status == 'Completed' || data.status == 'Delayed');
+    }
+
+    function isValidDocument(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.poId is string && data.poId.size() <= 128
+          && data.type is string && (data.type == 'PO' || data.type == 'Tech Pack' || data.type == 'BOM' || data.type == 'Lab Dip' || data.type == 'PP Sample' || data.type == 'Inspection Report' || data.type == 'Invoice' || data.type == 'Packing List')
+          && data.fileUrl is string && data.fileUrl.size() <= 1000;
+    }
+
+    function isValidRFQ(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.styleName is string && data.styleName.size() <= 150
+          && data.orderQty is number && data.orderQty >= 1;
+    }
+
+    function isValidQuotation(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.rfqId is string && data.rfqId.size() <= 128
+          && data.supplierCompanyId is string && data.supplierCompanyId.size() <= 128
+          && data.quotedPrice is number && data.quotedPrice > 0;
+    }
+
+    function isValidNotification(data) {
+      return data.id is string && data.id.size() <= 128
+          && data.poId is string && data.poId.size() <= 128
+          && data.message is string && data.message.size() <= 1000;
+    }
+
+
+    // --- RULES SPECIFICATION BY MATCH PATH ---
+
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidUser(incoming()) && (isOwner(userId) || incoming().id == userId);
+      allow update: if isSignedIn() && isValidUser(incoming()) && isOwner(userId) && incoming().role == existing().role;
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+
+    match /companies/{companyId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create, update: if isSignedIn() && isValidCompany(incoming());
+      allow delete: if isSignedIn();
+    }
+
+    match /orders/{orderId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidOrder(incoming());
+      allow update: if isSignedIn() && isValidOrder(incoming());
+      allow delete: if isSignedIn();
+    }
+
+    match /activity_logs/{logId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidActivityLog(incoming());
+      allow update: if isSignedIn() && isValidActivityLog(incoming());
+      allow delete: if isSignedIn();
+    }
+
+    match /po_tasks/{taskId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidTask(incoming());
+      allow update: if isSignedIn() && isValidTask(incoming());
+      allow delete: if isSignedIn();
+    }
+
+    match /tna_events/{eventId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidTNAEvent(incoming());
+      allow update: if isSignedIn() && isValidTNAEvent(incoming());
+      allow delete: if isSignedIn();
+    }
+
+    match /po_documents/{docId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidDocument(incoming());
+      allow update: if isSignedIn() && isValidDocument(incoming());
+      allow delete: if isSignedIn();
+    }
+
+    match /rfqs/{rfqId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidRFQ(incoming());
+      allow update: if isSignedIn() && isValidRFQ(incoming());
+      allow delete: if isSignedIn();
+    }
+
+    match /quotations/{quotationId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidQuotation(incoming());
+      allow update: if isSignedIn() && isValidQuotation(incoming());
+      allow delete: if isSignedIn();
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidNotification(incoming());
+      allow update: if isSignedIn() && isValidNotification(incoming());
+      allow delete: if isSignedIn();
+    }
+  }
+}
